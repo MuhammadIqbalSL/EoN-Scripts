@@ -1,6 +1,6 @@
 --=============================================================================
 -- RED SPAMMER PRO - MULTI-WORKSPACE EXECUTOR
--- Version: 7.0.0 (Ultimate Tab Edition)
+-- Version: 7.0.0 (Ultimate Tab Edition - Advanced UI Remake)
 -- Architecture: Object-Oriented Workspace Management System
 --=============================================================================
 
@@ -41,6 +41,12 @@ local Theme = {
     Error = Color3.fromRGB(231, 76, 60)
 }
 
+-- Registry untuk dynamic styling realtime (Border & Text)
+local DynamicElements = {
+    Borders = {},
+    Texts = {}
+}
+
 --====================================================
 -- 2. UTILITIES & HELPERS
 --====================================================
@@ -55,6 +61,17 @@ function Utils.Create(className, properties, children)
         child.Parent = inst
     end
     if properties and properties.Parent then inst.Parent = properties.Parent end
+    
+    -- Registrasi otomatis untuk dynamic styling
+    if inst:IsA("UIStroke") then
+        table.insert(DynamicElements.Borders, inst)
+    elseif inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+        table.insert(DynamicElements.Texts, {
+            Object = inst,
+            BaseSize = inst.TextSize
+        })
+    end
+
     return inst
 end
 
@@ -72,7 +89,6 @@ function Utils.FormatTime(seconds)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- Smooth Window & Button Dragging (Optimized for zero-lag frames)
 function Utils.EnableDrag(dragArea, targetFrame, isFloating)
     local dragging = false
     local dragInput
@@ -117,12 +133,10 @@ function Utils.EnableDrag(dragArea, targetFrame, isFloating)
         end
     end)
     
-    -- Mengembalikan deteksi click vs drag untuk Floating Button
     if isFloating then
         dragArea.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 if not hasMoved then
-                    -- Trigger Click (Restore)
                     _G.RestoreMainWindow()
                 end
             end
@@ -138,7 +152,7 @@ if CoreGui:FindFirstChild(Config.GuiName) then
 end
 
 --====================================================
--- 4. UI CONSTRUCTION (BOOTSTRAP)
+-- 4. UI CONSTRUCTION (BOOTSTRAP & CONTAINERS)
 --====================================================
 local GUI = Utils.Create("ScreenGui", { Name = Config.GuiName, Parent = CoreGui, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
 
@@ -150,7 +164,7 @@ local NotifContainer = Utils.Create("Frame", {
     Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 8) })
 })
 
--- Main Dashboard
+-- Main Window Base Frame
 local MainFrame = Utils.Create("Frame", {
     Parent = GUI, BackgroundColor3 = Theme.Background, Size = UDim2.new(0, 600, 0, 420),
     Position = UDim2.new(0.5, -300, 0.5, -210), ClipsDescendants = true
@@ -159,9 +173,15 @@ local MainFrame = Utils.Create("Frame", {
     Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1.5 })
 })
 
+-- Container yang dapat bergeser saat Advanced Settings dibuka
+local ContentContainer = Utils.Create("Frame", {
+    Parent = MainFrame, BackgroundColor3 = Theme.Background, BackgroundTransparency = 1,
+    Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0)
+})
+
 -- Drag Header
 local Header = Utils.Create("Frame", {
-    Parent = MainFrame, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 40)
+    Parent = ContentContainer, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 40)
 }, {
     Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
     Utils.Create("Frame", { BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0.5, 0), Position = UDim2.new(0, 0, 0.5, 0), BorderSizePixel = 0 }),
@@ -169,13 +189,14 @@ local Header = Utils.Create("Frame", {
 })
 Utils.EnableDrag(Header, MainFrame, false)
 
--- Navigation Buttons (Min & Kill)
+-- Navigation Buttons (Settings, Min & Kill)
+local SettingsBtn = Utils.Create("TextButton", { Parent = Header, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Position = UDim2.new(1, -105, 0, 0), Text = "⚙", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Text })
 local MinBtn = Utils.Create("TextButton", { Parent = Header, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Position = UDim2.new(1, -70, 0, 0), Text = "-", Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = Theme.Text })
 local CloseBtn = Utils.Create("TextButton", { Parent = Header, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Position = UDim2.new(1, -35, 0, 0), Text = "×", Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = Theme.Text })
 
 -- Tabs Workspace Bar Container
 local TabBarFrame = Utils.Create("Frame", {
-    Parent = MainFrame, BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 0, 40)
+    Parent = ContentContainer, BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 0, 40)
 }, {
     Utils.Create("Frame", { BackgroundColor3 = Theme.Border, Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), BorderSizePixel = 0 })
 })
@@ -188,7 +209,7 @@ local TabScrollingFrame = Utils.Create("ScrollingFrame", {
 })
 
 -- Workspace Panels Area
-local Body = Utils.Create("Frame", { Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -105), Position = UDim2.new(0, 10, 0, 85) })
+local Body = Utils.Create("Frame", { Parent = ContentContainer, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -105), Position = UDim2.new(0, 10, 0, 85) })
 local LeftPanel = Utils.Create("Frame", { Parent = Body, BackgroundTransparency = 1, Size = UDim2.new(0.55, -5, 1, 0) })
 local RightPanel = Utils.Create("Frame", { Parent = Body, BackgroundTransparency = 1, Size = UDim2.new(0.45, -5, 1, 0), Position = UDim2.new(0.55, 10, 0, 0) })
 
@@ -237,9 +258,9 @@ local SpamBtn = Utils.Create("TextButton", { Parent = RightPanel, BackgroundColo
 })
 
 -- Footer & Version Label
-local Footer = Utils.Create("TextLabel", { Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -20), Text = Config.Version .. " | Ready", Font = Enum.Font.Gotham, TextSize = 9, TextColor3 = Theme.TextMuted, TextXAlignment = Enum.TextXAlignment.Right })
+local Footer = Utils.Create("TextLabel", { Parent = ContentContainer, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -20), Text = Config.Version .. " | Ready", Font = Enum.Font.Gotham, TextSize = 9, TextColor3 = Theme.TextMuted, TextXAlignment = Enum.TextXAlignment.Right })
 
--- Tab Close Dialog Confirmation Frame (Overlay modal)
+-- Tab Close Dialog Confirmation Frame
 local ConfirmOverlay = Utils.Create("Frame", {
     Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(8, 8, 10), Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
     BackgroundTransparency = 1, Visible = false, ZIndex = 10
@@ -249,7 +270,7 @@ local ConfirmOverlay = Utils.Create("Frame", {
     }, {
         Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
         Utils.Create("UIStroke", { Color = Theme.Accent, Thickness = 1.5 }),
-        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 30), Position = UDim2.new(0, 15, 0, 15), Text = "CLOSE SESSIÓN?", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Center }),
+        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 30), Position = UDim2.new(0, 15, 0, 15), Text = "CLOSE SESSION?", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Center }),
         Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 45), Position = UDim2.new(0, 15, 0, 45), Text = "The executor is currently running.\nDo you want to terminate this active session?", Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Theme.Text, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }),
         Utils.Create("TextButton", { Name = "CancelBtn", BackgroundColor3 = Theme.Background, Size = UDim2.new(0, 130, 0, 35), Position = UDim2.new(0, 20, 1, -50), Text = "Cancel", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) }),
         Utils.Create("TextButton", { Name = "ConfirmBtn", BackgroundColor3 = Theme.Accent, Size = UDim2.new(0, 130, 0, 35), Position = UDim2.new(1, -150, 1, -50), Text = "Close Session", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255, 255, 255) }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }) })
@@ -268,7 +289,215 @@ local FloatBtn = Utils.Create("Frame", {
 Utils.EnableDrag(FloatBtn, FloatBtn, true)
 
 --====================================================
--- 5. NOTIFICATION ENGINE
+-- 5. ADVANCED SETTINGS PANEL & SLIDER COMPONENT
+--====================================================
+
+-- Side Settings Panel (Embedded UI)
+local SettingsPanel = Utils.Create("Frame", {
+    Parent = MainFrame, BackgroundColor3 = Theme.Panel,
+    Size = UDim2.new(0, 240, 1, 0), Position = UDim2.new(1, 0, 0, 0)
+}, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+    Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1.5 }),
+    Utils.Create("Frame", { BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 10, 1, 0), Position = UDim2.new(0, 0, 0, 0), BorderSizePixel = 0 })
+})
+
+local SettingsHeader = Utils.Create("Frame", {
+    Parent = SettingsPanel, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40)
+}, {
+    Utils.Create("TextLabel", {
+        BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 15, 0, 0),
+        Text = "ADVANCED SETTINGS", Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = Theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+})
+
+local SettingsContent = Utils.Create("ScrollingFrame", {
+    Parent = SettingsPanel, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -50),
+    Position = UDim2.new(0, 10, 0, 45), ScrollBarThickness = 2, CanvasSize = UDim2.new(0, 0, 0, 0)
+}, {
+    Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 14) })
+})
+
+-- Reusable Custom Slider Component
+local Slider = {}
+Slider.__index = Slider
+
+function Slider.new(parent, config)
+    local self = setmetatable({}, Slider)
+    self.Min = config.Min or 0
+    self.Max = config.Max or 100
+    self.Value = config.Default or self.Min
+    self.Callback = config.Callback or function() end
+    self.IsHSV = config.IsHSV or false
+
+    self.Frame = Utils.Create("Frame", {
+        Parent = parent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 45)
+    })
+
+    self.TitleLabel = Utils.Create("TextLabel", {
+        Parent = self.Frame, BackgroundTransparency = 1, Size = UDim2.new(0.7, 0, 0, 18),
+        Text = config.Title or "Slider", Font = Enum.Font.GothamSemibold, TextSize = 10,
+        TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    self.ValueLabel = Utils.Create("TextLabel", {
+        Parent = self.Frame, BackgroundTransparency = 1, Size = UDim2.new(0.3, 0, 0, 18),
+        Position = UDim2.new(0.7, 0, 0, 0), Text = tostring(math.floor(self.Value)),
+        Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = Theme.TextMuted,
+        TextXAlignment = Enum.TextXAlignment.Right
+    })
+
+    -- Track container tersendiri
+    self.Track = Utils.Create("Frame", {
+        Parent = self.Frame, BackgroundColor3 = Theme.Background,
+        Size = UDim2.new(1, 0, 0, 10), Position = UDim2.new(0, 0, 0, 24),
+        ClipsDescendants = false
+    }, {
+        Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+        Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
+    })
+
+    if self.IsHSV then
+        -- Multi-color bar visual khusus Color Slider
+        Utils.Create("UIGradient", {
+            Parent = self.Track,
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromHSV(0, 1, 1)),
+                ColorSequenceKeypoint.new(0.16, Color3.fromHSV(0.16, 1, 1)),
+                ColorSequenceKeypoint.new(0.33, Color3.fromHSV(0.33, 1, 1)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromHSV(0.5, 1, 1)),
+                ColorSequenceKeypoint.new(0.66, Color3.fromHSV(0.66, 1, 1)),
+                ColorSequenceKeypoint.new(0.83, Color3.fromHSV(0.83, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.fromHSV(1, 1, 1))
+            })
+        })
+    end
+
+    self.Fill = Utils.Create("Frame", {
+        Parent = self.Track, BackgroundColor3 = self.IsHSV and Color3.fromRGB(255, 255, 255) or Theme.Accent,
+        Size = UDim2.new(0, 0, 1, 0), BackgroundTransparency = self.IsHSV and 0.6 or 0
+    }, {
+        Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+        Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
+    })
+
+    -- Thumb yang warnanya selaras dengan background slider
+    self.Thumb = Utils.Create("Frame", {
+        Parent = self.Track, BackgroundColor3 = Theme.Background,
+        Size = UDim2.new(0, 16, 0, 16), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0, 0, 0.5, 0), ZIndex = 3
+    }, {
+        Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+        Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1.5 })
+    })
+
+    self:InitDrag()
+    self:SetValue(self.Value)
+    return self
+end
+
+function Slider:SetValue(val)
+    self.Value = math.clamp(val, self.Min, self.Max)
+    local alpha = (self.Value - self.Min) / (self.Max - self.Min)
+    
+    self.Fill.Size = UDim2.new(alpha, 0, 1, 0)
+    self.Thumb.Position = UDim2.new(alpha, 0, 0.5, 0)
+    
+    if self.IsHSV then
+        self.ValueLabel.Text = string.format("%d°", math.floor(self.Value * 360))
+    else
+        self.ValueLabel.Text = tostring(math.floor(self.Value))
+    end
+
+    self.Callback(self.Value)
+end
+
+function Slider:InitDrag()
+    local dragging = false
+
+    local function UpdateInput(input)
+        local trackAbsPos = self.Track.AbsolutePosition.X
+        local trackAbsSize = self.Track.AbsoluteSize.X
+        local mousePos = input.Position.X
+        local alpha = math.clamp((mousePos - trackAbsPos) / trackAbsSize, 0, 1)
+        local value = self.Min + (alpha * (self.Max - self.Min))
+        self:SetValue(value)
+    end
+
+    self.Track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            UpdateInput(input)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            UpdateInput(input)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+-- Instances Slider
+local BorderSlider = Slider.new(SettingsContent, {
+    Title = "Border Color", Min = 0, Max = 1, Default = 0, IsHSV = true,
+    Callback = function(val)
+        local col = Color3.fromHSV(val, 0.7, 0.9)
+        for _, stroke in ipairs(DynamicElements.Borders) do
+            if stroke and stroke.Parent then
+                stroke.Color = col
+            end
+        end
+    end
+})
+
+local OpacitySlider = Slider.new(SettingsContent, {
+    Title = "Background Opacity", Min = 0, Max = 100, Default = 0,
+    Callback = function(val)
+        MainFrame.BackgroundTransparency = val / 100
+    end
+})
+
+local TextSizeSlider = Slider.new(SettingsContent, {
+    Title = "GUI Text Size", Min = 8, Max = 18, Default = 11,
+    Callback = function(val)
+        for _, item in ipairs(DynamicElements.Texts) do
+            if item.Object and item.Object.Parent then
+                item.Object.TextSize = val
+            end
+        end
+    end
+})
+
+SettingsContent.CanvasSize = UDim2.new(0, 0, 0, SettingsContent.UIListLayout.AbsoluteContentSize.Y + 10)
+
+-- Animated Settings Panel Toggle
+local isSettingsOpen = false
+SettingsBtn.Activated:Connect(function()
+    isSettingsOpen = not isSettingsOpen
+    
+    if isSettingsOpen then
+        Utils.Tween(ContentContainer, { Position = UDim2.new(0, -120, 0, 0) }, 0.25)
+        Utils.Tween(SettingsPanel, { Position = UDim2.new(1, -240, 0, 0) }, 0.25)
+    else
+        Utils.Tween(ContentContainer, { Position = UDim2.new(0, 0, 0, 0) }, 0.25)
+        Utils.Tween(SettingsPanel, { Position = UDim2.new(1, 0, 0, 0) }, 0.25)
+    end
+end)
+
+-- Hover Effects Settings Button
+SettingsBtn.MouseEnter:Connect(function() Utils.Tween(SettingsBtn, { TextColor3 = Theme.Accent }, 0.1) end)
+SettingsBtn.MouseLeave:Connect(function() Utils.Tween(SettingsBtn, { TextColor3 = Theme.Text }, 0.1) end)
+
+--====================================================
+-- 6. NOTIFICATION ENGINE
 --====================================================
 local Notification = {}
 
@@ -302,7 +531,7 @@ function Notification.Notify(title, desc, notifType)
 end
 
 --====================================================
--- 6. WORKSPACE CLASS & INSTANCE MANAGER
+-- 7. WORKSPACE CLASS & INSTANCE MANAGER
 --====================================================
 local WorkspaceManager = {
     Workspaces = {},
@@ -324,8 +553,8 @@ function Workspace.new(id)
     self.StartTime = 0
     self.Runtime = 0
     self.TotalCalls = 0
-    self.Status = "STOPPED" -- "STOPPED", "RUNNING", "ERROR"
-    self.Logs = {} -- Structure of {text, type, time}
+    self.Status = "STOPPED"
+    self.Logs = {}
     
     self.SpamThread = nil
     self.LastError = ""
@@ -365,7 +594,6 @@ function Workspace:CreateTabUI()
         })
     })
 
-    -- Hover effect
     self.TabUI.MouseEnter:Connect(function()
         if WorkspaceManager.ActiveWorkspace ~= self then
             Utils.Tween(self.TabUI, { BackgroundColor3 = self.TabUI.BackgroundColor3:Lerp(Color3.fromRGB(255,255,255), 0.1) }, 0.1)
@@ -375,7 +603,6 @@ function Workspace:CreateTabUI()
         self:UpdateVisual()
     end)
 
-    -- Tab Interactions
     self.TabUI.SelectBtn.Activated:Connect(function()
         WorkspaceManager.SwitchTab(self)
     end)
@@ -388,11 +615,9 @@ end
 function Workspace:UpdateVisual()
     if not self.TabUI then return end
     
-    -- Outline Indicator untuk Tab Aktif
     local isActive = (WorkspaceManager.ActiveWorkspace == self)
     self.TabUI.ActiveStroke.Enabled = isActive
 
-    -- Status Color Mapping
     if self.Status == "RUNNING" then
         self.TabUI.BackgroundColor3 = Theme.TabRunning
     elseif self.Status == "ERROR" then
@@ -411,7 +636,6 @@ function Workspace:Log(text, logType)
         table.remove(self.Logs, 1)
     end
 
-    -- Render ke UI Console jika Tab ini sedang aktif dibuka
     if WorkspaceManager.ActiveWorkspace == self then
         WorkspaceManager.RenderLogItem(text, logType, rawTime)
     end
@@ -428,7 +652,7 @@ function Workspace:ClearLogs()
 end
 
 --====================================================
--- 7. EXECUTOR (CORE ALGORITHM - PARALLEL ISOLATION)
+-- 8. EXECUTOR (CORE ALGORITHM - PARALLEL ISOLATION)
 --====================================================
 function Workspace:Start()
     if self.Script:gsub("%s+", "") == "" then
@@ -449,10 +673,9 @@ function Workspace:Start()
     self.Status = "RUNNING"
     self:UpdateVisual()
     
-    self.StartTime = tick() - self.Runtime -- Memungkinkan hitungan resume yang presisi
+    self.StartTime = tick() - self.Runtime
     self:Log("Execution Started (Threads: " .. self.Threads .. " | Delay: " .. self.Delay .. "s)", "SUCCESS")
 
-    -- CORE ALGORITHM LOOP RUNTIME (Diproteksi secara independen per tab)
     self.SpamThread = task.spawn(function()
         while self.IsRunning do
             for i = 1, self.Threads do
@@ -496,7 +719,7 @@ function Workspace:Destroy()
 end
 
 --====================================================
--- 8. WORKSPACE MANAGER LOGIC
+-- 9. WORKSPACE MANAGER LOGIC
 --====================================================
 function WorkspaceManager.CreateTab()
     if WorkspaceManager.TabCount >= Config.MaxTabs then
@@ -504,7 +727,6 @@ function WorkspaceManager.CreateTab()
         return
     end
 
-    -- Mencari Unused ID
     local id = 1
     while WorkspaceManager.Workspaces[id] ~= nil do
         id = id + 1
@@ -514,10 +736,7 @@ function WorkspaceManager.CreateTab()
     WorkspaceManager.Workspaces[id] = ws
     WorkspaceManager.TabCount = WorkspaceManager.TabCount + 1
 
-    -- Parent tab UI ke scrolling container
     ws.TabUI.Parent = TabScrollingFrame
-    
-    -- Menyesuaikan lebar Canvas scrolling tab bar
     TabScrollingFrame.CanvasSize = UDim2.new(0, TabScrollingFrame.UIListLayout.AbsoluteContentSize.X + 60, 1, 0)
 
     WorkspaceManager.SwitchTab(ws)
@@ -527,7 +746,6 @@ end
 function WorkspaceManager.SwitchTab(targetWs)
     if WorkspaceManager.ActiveWorkspace == targetWs then return end
 
-    -- 1. Menyimpan data UI Input saat ini ke Workspace lama
     local prevWs = WorkspaceManager.ActiveWorkspace
     if prevWs then
         prevWs.Script = ScriptInput.Text
@@ -537,16 +755,13 @@ function WorkspaceManager.SwitchTab(targetWs)
 
     WorkspaceManager.ActiveWorkspace = targetWs
 
-    -- 2. Memperbarui Visual Indikator Tab
     if prevWs then prevWs:UpdateVisual() end
     targetWs:UpdateVisual()
 
-    -- 3. Memuat data Workspace baru ke UI Input
     ScriptInput.Text = targetWs.Script
     ThreadsInput.Text = tostring(targetWs.Threads)
     DelayInput.Text = tostring(targetWs.Delay)
 
-    -- 4. Me-render ulang daftar Console Logs milik Workspace baru
     for _, child in pairs(ConsoleFrame:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
     end
@@ -574,7 +789,6 @@ function WorkspaceManager.CloseTabDirect(ws)
     WorkspaceManager.Workspaces[ws.Id] = nil
     WorkspaceManager.TabCount = WorkspaceManager.TabCount - 1
 
-    -- Jika tab yang ditutup adalah Tab Aktif saat ini, pindahkan ke tab yang tersedia
     if WorkspaceManager.ActiveWorkspace == ws then
         local nextWs = nil
         for _, otherWs in pairs(WorkspaceManager.Workspaces) do
@@ -585,7 +799,6 @@ function WorkspaceManager.CloseTabDirect(ws)
         if nextWs then
             WorkspaceManager.SwitchTab(nextWs)
         else
-            -- Jika semua tab ditutup, otomatis buat 1 tab baru kosong agar UI tidak pincang
             WorkspaceManager.ActiveWorkspace = nil
             WorkspaceManager.CreateTab()
         end
@@ -614,7 +827,6 @@ function WorkspaceManager.UpdateActiveUI()
     local ws = WorkspaceManager.ActiveWorkspace
     if not ws then return end
 
-    -- Sinkronisasi tombol start/stop
     if ws.IsRunning then
         LblStatus.Text = "Status: RUNNING"
         LblStatus.TextColor3 = Theme.Success
@@ -633,7 +845,7 @@ function WorkspaceManager.UpdateActiveUI()
 end
 
 --====================================================
--- 9. MAIN WINDOW CONTROL FLOW (OPEN, CLOSE, MINIMIZE)
+-- 10. MAIN WINDOW CONTROL FLOW (OPEN, CLOSE, MINIMIZE)
 --====================================================
 local function Minimize()
     Utils.Tween(MainFrame, { Size = UDim2.new(0, 600, 0, 0), Position = UDim2.new(0.5, -300, 0.5, 0) }, 0.25)
@@ -650,7 +862,7 @@ function _G.RestoreMainWindow()
 end
 
 --====================================================
--- 10. SYSTEM GLOBAL THREAD (UI REFRESHER)
+-- 11. SYSTEM GLOBAL THREAD (UI REFRESHER)
 --====================================================
 task.spawn(function()
     while true do
@@ -662,7 +874,6 @@ task.spawn(function()
             LblRuntime.Text = "Runtime: " .. Utils.FormatTime(ws.Runtime)
             LblCalls.Text = "Total Executed: " .. tostring(ws.TotalCalls)
             
-            -- Terus-menerus memperbarui teks di status card
             WorkspaceManager.UpdateActiveUI()
         end
         task.wait(Config.UpdateRate)
@@ -670,14 +881,14 @@ task.spawn(function()
 end)
 
 --====================================================
--- 11. BINDINGS & CONNECTIONS
+-- 12. BINDINGS & CONNECTIONS
 --====================================================
 
 -- Add Tab Button [+]
 local AddTabButton = Utils.Create("TextButton", {
     Parent = TabScrollingFrame, Size = UDim2.new(0, 26, 1, -4),
     BackgroundColor3 = Theme.Panel, Text = "+", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Accent,
-    LayoutOrder = 999999 -- Pastikan selalu berada di ujung kanan
+    LayoutOrder = 999999
 }, {
     Utils.Create("UICorner", { CornerRadius = UDim.new(0, 4) }),
     Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
@@ -695,7 +906,6 @@ SpamBtn.Activated:Connect(function()
     if ws.IsRunning then
         ws:Stop()
     else
-        -- Update state input ke object tab sebelum start
         ws.Script = ScriptInput.Text
         ws.Threads = tonumber(ThreadsInput.Text) or 1
         ws.Delay = tonumber(DelayInput.Text) or 0
@@ -723,7 +933,6 @@ end)
 MinBtn.Activated:Connect(Minimize)
 
 CloseBtn.Activated:Connect(function()
-    -- Menghentikan seluruh proses background workspace saat UI dimatikan total
     for _, ws in pairs(WorkspaceManager.Workspaces) do
         ws:Stop()
     end
@@ -751,13 +960,13 @@ ConfirmOverlay.CancelBtn.Activated:Connect(function()
     ConfirmOverlay.Visible = false
 end)
 
--- Validasi TextBox Inputs (Hanya angka desimal dan bulat)
+-- Validasi TextBox Inputs
 local function ValidateNumericBox(textBox, allowFloat)
     textBox:GetPropertyChangedSignal("Text"):Connect(function()
         if allowFloat then
-            textBox.Text = textBox.Text:gsub("[^%d%.]", "") -- Filter non-angka dan non-titik
+            textBox.Text = textBox.Text:gsub("[^%d%.]", "")
         else
-            textBox.Text = textBox.Text:gsub("%D", "") -- Hanya angka bulat
+            textBox.Text = textBox.Text:gsub("%D", "")
         end
     end)
 end
@@ -765,7 +974,6 @@ ValidateNumericBox(ThreadsInput, false)
 ValidateNumericBox(DelayInput, true)
 
 --====================================================
--- 12. INITIALIZATION
+-- 13. INITIALIZATION
 --====================================================
--- Membuat tab default pertama saat system startup
 WorkspaceManager.CreateTab()
