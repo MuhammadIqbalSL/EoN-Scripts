@@ -1,25 +1,25 @@
 --=============================================================================
--- RED SPAMMER PRO - MULTI-WORKSPACE EXECUTOR WITH ADVANCED SETTINGS SYSTEM
--- Version: 7.5.0 (Ultimate UX & Engine Expansion)
--- Architecture: Object-Oriented, Isolated State Machine, Realtime Reactivity
+-- RED SPAMMER PRO - MULTI-WORKSPACE EXECUTOR
+-- Version: 7.0.0 (Ultimate Tab Edition)
+-- Architecture: Object-Oriented Workspace Management System
 --=============================================================================
 
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
 
 --====================================================
--- 1. CONFIGURATION, THEME & REACTIVE STATES
+-- 1. CONFIGURATION, THEME & STATES
 --====================================================
 local Config = {
     GuiName = "RedSpammer_V7_Pro",
-    Version = "v7.5.0 Pro",
+    Version = "v7.0.0 Pro",
     MaxTabs = 10,
     MaxConsoleLogs = 100,
-    UpdateRate = 0.1, -- UI Refresh rate dasar
-    DragThreshold = 6
+    AnimationSpeed = 0.25,
+    UpdateRate = 0.1, -- Refresh UI stats (detik)
+    DragThreshold = 6 -- Pixel threshold sebelum dianggap Dragging
 }
 
 local Theme = {
@@ -31,6 +31,7 @@ local Theme = {
     TextMuted = Color3.fromRGB(130, 130, 140),
     Border = Color3.fromRGB(45, 45, 50),
     
+    -- Status Colors (High Contrast)
     TabStopped = Color3.fromRGB(35, 35, 40),
     TabRunning = Color3.fromRGB(20, 110, 45),
     TabError = Color3.fromRGB(175, 35, 35),
@@ -40,48 +41,8 @@ local Theme = {
     Error = Color3.fromRGB(231, 76, 60)
 }
 
--- Global Settings State (Factory Defaults)
-local SettingsState = {
-    GuiScale = 1.0,
-    BackgroundOpacity = 0,
-    BorderColor = Color3.fromRGB(230, 35, 35),
-    RainbowBorder = false,
-    UiBlur = 0,
-    AnimationSpeed = "Normal", -- Slow, Normal, Fast
-    CompactMode = false,
-    BoostFpsMode = false,
-    Keybinds = {
-        ToggleGui = Enum.KeyCode.RightControl,
-        OpenSettings = Enum.KeyCode.F8
-    }
-}
-
-local AppState = {
-    IsRunning = false,
-    CurrentView = "Workspace", -- "Workspace" atau "Settings"
-    FloatPosition = UDim2.new(0.05, 0, 0.5, -21),
-    Connections = {},
-    ActiveTweens = {}
-}
-
--- Deep Copy untuk Factory Reset
-local DefaultSettings = {
-    GuiScale = 1.0,
-    BackgroundOpacity = 0,
-    BorderColor = Color3.fromRGB(230, 35, 35),
-    RainbowBorder = false,
-    UiBlur = 0,
-    AnimationSpeed = "Normal",
-    CompactMode = false,
-    BoostFpsMode = false,
-    Keybinds = {
-        ToggleGui = Enum.KeyCode.RightControl,
-        OpenSettings = Enum.KeyCode.F8
-    }
-}
-
 --====================================================
--- 2. UTILITIES & TWEEN ENGINE
+-- 2. UTILITIES & HELPERS
 --====================================================
 local Utils = {}
 
@@ -90,24 +51,17 @@ function Utils.Create(className, properties, children)
     for k, v in pairs(properties or {}) do
         if k ~= "Parent" then inst[k] = v end
     end
-    for _, child in pairs(children or {}) do child.Parent = inst end
+    for _, child in pairs(children or {}) do
+        child.Parent = inst
+    end
     if properties and properties.Parent then inst.Parent = properties.Parent end
     return inst
 end
 
-function Utils.GetTweenDuration()
-    if SettingsState.BoostFpsMode then return 0.02 end
-    if SettingsState.AnimationSpeed == "Fast" then return 0.1
-    elseif SettingsState.AnimationSpeed == "Slow" then return 0.4
-    else return 0.22 end -- Normal
-end
-
-function Utils.Tween(obj, props, customDuration)
-    local duration = customDuration or Utils.GetTweenDuration()
-    local info = TweenInfo.new(duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(obj, info, props)
+function Utils.Tween(obj, props, duration)
+    duration = duration or Config.AnimationSpeed
+    local tween = TweenService:Create(obj, TweenInfo.new(duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
     tween:Play()
-    table.insert(AppState.ActiveTweens, tween)
     return tween
 end
 
@@ -118,25 +72,12 @@ function Utils.FormatTime(seconds)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
-function Utils.ApplyHover(button, baseSize, scaleMult, baseColor, hoverColor)
-    button.MouseEnter:Connect(function()
-        if SettingsState.BoostFpsMode then return end
-        Utils.Tween(button, {
-            Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset * scaleMult, baseSize.Y.Scale, baseSize.Y.Offset * scaleMult),
-            BackgroundColor3 = hoverColor or button.BackgroundColor3
-        })
-    end)
-    button.MouseLeave:Connect(function()
-        Utils.Tween(button, {
-            Size = baseSize,
-            BackgroundColor3 = baseColor or button.BackgroundColor3
-        })
-    end)
-end
-
+-- Smooth Window & Button Dragging (Optimized for zero-lag frames)
 function Utils.EnableDrag(dragArea, targetFrame, isFloating)
     local dragging = false
-    local dragInput, dragStart, startPos
+    local dragInput
+    local dragStart
+    local startPos
     local hasMoved = false
 
     dragArea.InputBegan:Connect(function(input)
@@ -145,12 +86,10 @@ function Utils.EnableDrag(dragArea, targetFrame, isFloating)
             dragStart = input.Position
             startPos = targetFrame.Position
             hasMoved = false
-            
-            local c
-            c = input.Changed:Connect(function()
+
+            input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
-                    c:Disconnect()
                 end
             end)
         end
@@ -162,25 +101,30 @@ function Utils.EnableDrag(dragArea, targetFrame, isFloating)
         end
     end)
 
-    local changedConn = UserInputService.InputChanged:Connect(function(input)
+    UserInputService.InputChanged:Connect(function(input)
         if dragging and input == dragInput then
             local delta = input.Position - dragStart
             if delta.Magnitude > Config.DragThreshold then
                 hasMoved = true
             end
+            
             if not isFloating or (isFloating and hasMoved) then
-                local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-                targetFrame.Position = newPos
-                if isFloating then AppState.FloatPosition = newPos end
+                targetFrame.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
             end
         end
     end)
-    table.insert(AppState.Connections, changedConn)
     
+    -- Mengembalikan deteksi click vs drag untuk Floating Button
     if isFloating then
         dragArea.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                if not hasMoved then _G.RestoreMainWindow() end
+                if not hasMoved then
+                    -- Trigger Click (Restore)
+                    _G.RestoreMainWindow()
+                end
             end
         end)
     end
@@ -189,328 +133,184 @@ end
 --====================================================
 -- 3. CLEANUP PREVIOUS INSTANCES
 --====================================================
-if CoreGui:FindFirstChild(Config.GuiName) then CoreGui[Config.GuiName]:Destroy() end
+if CoreGui:FindFirstChild(Config.GuiName) then
+    CoreGui[Config.GuiName]:Destroy()
+end
 
 --====================================================
--- 4. MAIN UI FRAMEWORK CONSTRUCTION
+-- 4. UI CONSTRUCTION (BOOTSTRAP)
 --====================================================
 local GUI = Utils.Create("ScreenGui", { Name = Config.GuiName, Parent = CoreGui, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
 
--- Global Fullscreen Overlay Dialog & Modal Area
-local ModalOverlay = Utils.Create("Frame", {
-    Parent = GUI, BackgroundColor3 = Color3.fromRGB(10, 10, 12), Size = UDim2.new(1, 0, 1, 0),
-    BackgroundTransparency = 1, Visible = false, ZIndex = 100
-}, {
-    Utils.Create("Frame", {
-        Name = "DialogCard", BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 340, 0, 150),
-        Position = UDim2.new(0.5, -170, 0.5, -75), BackgroundTransparency = 0, ClipsDescendants = true
-    }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
-        Utils.Create("UIStroke", { Color = Theme.Accent, Thickness = 1.5 }),
-        Utils.Create("TextLabel", { Name = "Desc", BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 50), Position = UDim2.new(0, 15, 0, 25), Text = "Do you want to close the GUI?", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Text, TextWrapped = true }),
-        Utils.Create("TextButton", { Name = "Cancel", BackgroundColor3 = Theme.Background, Size = UDim2.new(0, 130, 0, 35), Position = UDim2.new(0, 20, 1, -50), Text = "Cancel", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) }),
-        Utils.Create("TextButton", { Name = "Confirm", BackgroundColor3 = Theme.Accent, Size = UDim2.new(0, 130, 0, 35), Position = UDim2.new(1, -150, 1, -50), Text = "Confirm", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255, 255, 255) }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }) })
-    })
-})
-
 -- Toast Notification Container
-local NotifContainer = Utils.Create("Frame", { Parent = GUI, BackgroundTransparency = 1, Size = UDim2.new(0, 260, 1, -20), Position = UDim2.new(1, -270, 0, 10) }, {
+local NotifContainer = Utils.Create("Frame", {
+    Parent = GUI, BackgroundTransparency = 1, Size = UDim2.new(0, 260, 1, -20),
+    Position = UDim2.new(1, -270, 0, 10)
+}, {
     Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 8) })
 })
 
--- Main Dashboard Window Frame
-local MainFrame = Utils.Create("Frame", { Parent = GUI, BackgroundColor3 = Theme.Background, Size = UDim2.new(0, 600, 0, 420), Position = UDim2.new(0.5, -300, 0.5, -210), ClipsDescendants = true }, {
+-- Main Dashboard
+local MainFrame = Utils.Create("Frame", {
+    Parent = GUI, BackgroundColor3 = Theme.Background, Size = UDim2.new(0, 600, 0, 420),
+    Position = UDim2.new(0.5, -300, 0.5, -210), ClipsDescendants = true
+}, {
     Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
-    Utils.Create("UIStroke", { Name = "WindowBorder", Color = SettingsState.BorderColor, Thickness = 1.5 }),
-    Utils.Create("UIScale", { Name = "GlobalScale", Scale = 1.0 })
+    Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1.5 })
 })
 
--- Dynamic Header Section
-local Header = Utils.Create("Frame", { Parent = MainFrame, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 40) }, {
+-- Drag Header
+local Header = Utils.Create("Frame", {
+    Parent = MainFrame, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 40)
+}, {
     Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
     Utils.Create("Frame", { BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0.5, 0), Position = UDim2.new(0, 0, 0.5, 0), BorderSizePixel = 0 }),
-    Utils.Create("TextLabel", { Name = "Title", BackgroundTransparency = 1, Size = UDim2.new(0, 250, 1, 0), Position = UDim2.new(0, 15, 0, 0), Text = "RED SPAMMER PRO", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Left }),
-    Utils.Create("TextButton", { Name = "BackBtn", BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(0, 12, 0, 0), Text = "<", Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = Theme.Text, Visible = false })
+    Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(0, 150, 1, 0), Position = UDim2.new(0, 15, 0, 0), Text = "RED SPAMMER PRO", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Left })
 })
 Utils.EnableDrag(Header, MainFrame, false)
 
--- Header Action Navigation Buttons
-local NavContainer = Utils.Create("Frame", { Parent = Header, BackgroundTransparency = 1, Size = UDim2.new(0, 120, 1, 0), Position = UDim2.new(1, -120, 0, 0) }, {
-    Utils.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center })
+-- Navigation Buttons (Min & Kill)
+local MinBtn = Utils.Create("TextButton", { Parent = Header, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Position = UDim2.new(1, -70, 0, 0), Text = "-", Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = Theme.Text })
+local CloseBtn = Utils.Create("TextButton", { Parent = Header, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Position = UDim2.new(1, -35, 0, 0), Text = "×", Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = Theme.Text })
+
+-- Tabs Workspace Bar Container
+local TabBarFrame = Utils.Create("Frame", {
+    Parent = MainFrame, BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 0, 40)
+}, {
+    Utils.Create("Frame", { BackgroundColor3 = Theme.Border, Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), BorderSizePixel = 0 })
 })
-local SettingsNavBtn = Utils.Create("TextButton", { Parent = NavContainer, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Text = "⛭", Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = Theme.Text })
-local MinBtn = Utils.Create("TextButton", { Parent = NavContainer, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Text = "-", Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = Theme.Text })
-local CloseBtn = Utils.Create("TextButton", { Parent = NavContainer, BackgroundTransparency = 1, Size = UDim2.new(0, 35, 1, 0), Text = "×", Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = Theme.Text })
 
-Utils.ApplyHover(SettingsNavBtn, UDim2.new(0, 35, 1, 0), 1.1, nil, Theme.AccentGlow)
-Utils.ApplyHover(MinBtn, UDim2.new(0, 35, 1, 0), 1.1, nil, Theme.Text)
-Utils.ApplyHover(CloseBtn, UDim2.new(0, 35, 1, 0), 1.1, nil, Theme.Error)
-
---====================================================
--- 5. VIEW CONTAINERS (WORKSPACE VS SETTINGS)
---====================================================
--- Main Workspace View Container
-local WorkspaceView = Utils.Create("Frame", { Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -40), Position = UDim2.new(0, 0, 0, 40), Visible = true })
-
-local TabBarFrame = Utils.Create("Frame", { Parent = WorkspaceView, BackgroundColor3 = Theme.Background, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 0, 0) }, {
-    Utils.Create("Frame", { Name = "Line", BackgroundColor3 = Theme.Border, Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), BorderSizePixel = 0 })
-})
-local TabScrollingFrame = Utils.Create("ScrollingFrame", { Parent = TabBarFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -2), Position = UDim2.new(0, 10, 0, 0), CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X }, {
+local TabScrollingFrame = Utils.Create("ScrollingFrame", {
+    Parent = TabBarFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -2), Position = UDim2.new(0, 10, 0, 0),
+    CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X
+}, {
     Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
 })
 
-local Body = Utils.Create("Frame", { Name = "Body", Parent = WorkspaceView, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -45), Position = UDim2.new(0, 10, 0, 45) })
+-- Workspace Panels Area
+local Body = Utils.Create("Frame", { Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, -105), Position = UDim2.new(0, 10, 0, 85) })
 local LeftPanel = Utils.Create("Frame", { Parent = Body, BackgroundTransparency = 1, Size = UDim2.new(0.55, -5, 1, 0) })
 local RightPanel = Utils.Create("Frame", { Parent = Body, BackgroundTransparency = 1, Size = UDim2.new(0.45, -5, 1, 0), Position = UDim2.new(0.55, 10, 0, 0) })
 
--- Left Workspace Elements
-local ScriptInput = Utils.Create("TextBox", { Parent = LeftPanel, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 1, -45), Text = "", PlaceholderText = "-- Paste Raw Remote Script Here...", Font = Enum.Font.Code, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ClearTextOnFocus = false, TextWrapped = true }, {
-    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }), Utils.Create("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
+-- Left Panel Components
+local ScriptInput = Utils.Create("TextBox", {
+    Parent = LeftPanel, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 1, -45),
+    Text = "", PlaceholderText = "-- Paste Raw Remote Script Here...\n-- Independent workspace setup.",
+    Font = Enum.Font.Code, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ClearTextOnFocus = false, TextWrapped = true
+}, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+    Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }),
+    Utils.Create("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
 })
-local ConfigContainer = Utils.Create("Frame", { Name = "Config", Parent = LeftPanel, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 1, -35) })
+
+local ConfigContainer = Utils.Create("Frame", { Parent = LeftPanel, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 1, -35) })
 local ThreadsInput = Utils.Create("TextBox", { Parent = ConfigContainer, BackgroundColor3 = Theme.Panel, Size = UDim2.new(0.48, 0, 1, 0), Text = "1", PlaceholderText = "Threads", Font = Enum.Font.GothamSemibold, TextSize = 12, TextColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) })
 local DelayInput = Utils.Create("TextBox", { Parent = ConfigContainer, BackgroundColor3 = Theme.Panel, Size = UDim2.new(0.48, 0, 1, 0), Position = UDim2.new(0.52, 0, 0, 0), Text = "0", PlaceholderText = "Delay (s)", Font = Enum.Font.GothamSemibold, TextSize = 12, TextColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) })
 
--- Right Workspace Elements
-local StatsCard = Utils.Create("Frame", { Parent = RightPanel, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 80) }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) })
+-- Right Panel Components
+local StatsCard = Utils.Create("Frame", { Parent = RightPanel, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 80) }, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+    Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
+})
 local LblStatus = Utils.Create("TextLabel", { Parent = StatsCard, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 10, 0, 6), Text = "Status: STOPPED", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Theme.TextMuted, TextXAlignment = Enum.TextXAlignment.Left })
 local LblRuntime = Utils.Create("TextLabel", { Parent = StatsCard, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 10, 0, 28), Text = "Runtime: 00:00:00", Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left })
 local LblCalls = Utils.Create("TextLabel", { Parent = StatsCard, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 10, 0, 50), Text = "Total Executed: 0", Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left })
 
+-- Console Log & Header Panel
 local ConsoleHeaderFrame = Utils.Create("Frame", { Parent = RightPanel, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 25), Position = UDim2.new(0, 0, 0, 90) }, {
     Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(0.5, 0, 1, 0), Text = "WORKSPACE CONSOLE", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = Theme.TextMuted, TextXAlignment = Enum.TextXAlignment.Left }),
     Utils.Create("TextButton", { Name = "ClearBtn", BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 50, 0, 18), Position = UDim2.new(1, -50, 0.5, -9), Text = "Clear", Font = Enum.Font.GothamBold, TextSize = 9, TextColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 4) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) })
 })
-local ConsoleFrame = Utils.Create("ScrollingFrame", { Parent = RightPanel, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 1, -165), Position = UDim2.new(0, 0, 0, 115), ScrollBarThickness = 3, CanvasSize = UDim2.new(0, 0, 0, 0) }, {
-    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }), Utils.Create("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5) }), Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
-})
-local SpamBtn = Utils.Create("TextButton", { Parent = RightPanel, BackgroundColor3 = Theme.Accent, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 1, -35), Text = "DEPLOY ALL TROOPS", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255, 255, 255) }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }) })
 
--- Advanced Settings Layout Page Container
-local SettingsView = Utils.Create("Frame", { Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -40), Position = UDim2.new(0, 600, 0, 40), Visible = false })
-local SettingsScroll = Utils.Create("ScrollingFrame", { Parent = SettingsView, BackgroundTransparency = 1, Size = UDim2.new(1, -30, 1, -20), Position = UDim2.new(0, 15, 0, 10), ScrollBarThickness = 3, CanvasSize = UDim2.new(0, 0, 0, 550) }, {
-    Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 15) }),
-    Utils.Create("UIPadding", { PaddingRight = UDim.new(0, 10) })
+local ConsoleFrame = Utils.Create("ScrollingFrame", {
+    Parent = RightPanel, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 1, -165), Position = UDim2.new(0, 0, 0, 115),
+    ScrollBarThickness = 3, CanvasSize = UDim2.new(0, 0, 0, 0)
+}, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+    Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }),
+    Utils.Create("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5) }),
+    Utils.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 })
 
--- Float Minimize Overlay Button
-local FloatBtn = Utils.Create("Frame", { Parent = GUI, BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 42, 0, 42), Position = AppState.FloatPosition, Visible = false }, {
-    Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }), Utils.Create("UIStroke", { Color = Theme.Accent, Thickness = 2 }),
-    Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "⛭", Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center })
+local SpamBtn = Utils.Create("TextButton", { Parent = RightPanel, BackgroundColor3 = Theme.Accent, Size = UDim2.new(1, 0, 0, 35), Position = UDim2.new(0, 0, 1, -35), Text = "DEPLOY ALL TROOPS", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255, 255, 255) }, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) })
+})
+
+-- Footer & Version Label
+local Footer = Utils.Create("TextLabel", { Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -20), Text = Config.Version .. " | Ready", Font = Enum.Font.Gotham, TextSize = 9, TextColor3 = Theme.TextMuted, TextXAlignment = Enum.TextXAlignment.Right })
+
+-- Tab Close Dialog Confirmation Frame (Overlay modal)
+local ConfirmOverlay = Utils.Create("Frame", {
+    Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(8, 8, 10), Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+    BackgroundTransparency = 1, Visible = false, ZIndex = 10
+}, {
+    Utils.Create("Frame", {
+        BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 320, 0, 160), Position = UDim2.new(0.5, -160, 0.5, -80)
+    }, {
+        Utils.Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+        Utils.Create("UIStroke", { Color = Theme.Accent, Thickness = 1.5 }),
+        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 30), Position = UDim2.new(0, 15, 0, 15), Text = "CLOSE SESSIÓN?", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Center }),
+        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 45), Position = UDim2.new(0, 15, 0, 45), Text = "The executor is currently running.\nDo you want to terminate this active session?", Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Theme.Text, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }),
+        Utils.Create("TextButton", { Name = "CancelBtn", BackgroundColor3 = Theme.Background, Size = UDim2.new(0, 130, 0, 35), Position = UDim2.new(0, 20, 1, -50), Text = "Cancel", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 }) }),
+        Utils.Create("TextButton", { Name = "ConfirmBtn", BackgroundColor3 = Theme.Accent, Size = UDim2.new(0, 130, 0, 35), Position = UDim2.new(1, -150, 1, -50), Text = "Close Session", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255, 255, 255) }, { Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }) })
+    })
+})
+
+-- Float Minimize Button
+local FloatBtn = Utils.Create("Frame", {
+    Parent = GUI, BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 42, 0, 42),
+    Position = UDim2.new(0.05, 0, 0.5, -21), Visible = false
+}, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+    Utils.Create("UIStroke", { Color = Theme.Accent, Thickness = 2 }),
+    Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = "🔴", Font = Enum.Font.GothamBold, TextSize = 18, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center })
 })
 Utils.EnableDrag(FloatBtn, FloatBtn, true)
 
 --====================================================
--- 6. NOTIFICATION SYSTEM ENGINE
+-- 5. NOTIFICATION ENGINE
 --====================================================
 local Notification = {}
+
 function Notification.Notify(title, desc, notifType)
     local col = Theme.Accent
     if notifType == "Success" then col = Theme.Success
     elseif notifType == "Warning" then col = Theme.Warning end
 
-    local toast = Utils.Create("Frame", { Parent = NotifContainer, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 55), BackgroundTransparency = 1 }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = col, Thickness = 1.5 }),
-        Utils.Create("TextLabel", { Name = "T", BackgroundTransparency = 1, Size = UDim2.new(1, -15, 0, 22), Position = UDim2.new(0, 12, 0, 5), Text = title, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = col, TextTransparency = 1 }),
-        Utils.Create("TextLabel", { Name = "D", BackgroundTransparency = 1, Size = UDim2.new(1, -15, 0, 22), Position = UDim2.new(0, 12, 0, 25), Text = desc, Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = Theme.Text, TextWrapped = true, TextTransparency = 1 })
+    local toast = Utils.Create("Frame", {
+        Parent = NotifContainer, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 55), BackgroundTransparency = 1
+    }, {
+        Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+        Utils.Create("UIStroke", { Color = col, Thickness = 1.5 }),
+        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -15, 0, 22), Position = UDim2.new(0, 12, 0, 5), Text = title, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = col, TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1 }),
+        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -15, 0, 22), Position = UDim2.new(0, 12, 0, 25), Text = desc, Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, TextTransparency = 1 })
     })
+
     Utils.Tween(toast, { BackgroundTransparency = 0 }, 0.2)
-    Utils.Tween(toast.T, { TextTransparency = 0 }, 0.2)
-    Utils.Tween(toast.D, { TextTransparency = 0 }, 0.2)
+    for _, child in pairs(toast:GetChildren()) do
+        if child:IsA("TextLabel") then Utils.Tween(child, { TextTransparency = 0 }, 0.2) end
+    end
 
     task.delay(3, function()
-        if not toast or not toast.Parent then return end
         Utils.Tween(toast, { BackgroundTransparency = 1 }, 0.2)
-        Utils.Tween(toast.T, { TextTransparency = 1 }, 0.2)
-        Utils.Tween(toast.D, { TextTransparency = 1 }, 0.2)
-        task.wait(0.2) toast:Destroy()
-    end)
-end
-
---====================================================
--- 7. CUSTOM INTERACTIVE COMPONENTS (SLIDERS & TOGGLES)
---====================================================
-local Components = {}
-
-function Components.CreateCategory(parent, name)
-    return Utils.Create("Frame", { Name = name .. "Cat", Size = UDim2.new(1, 0, 0, 25), BackgroundTransparency = 1 }, {
-        Utils.Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = name:upper(), Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Left })
-    })
-end
-
-function Components.CreateSlider(parent, labelText, valuesList, defaultValue, callback)
-    local sliderFrame = Utils.Create("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Parent = parent })
-    local lbl = Utils.Create("TextLabel", { Parent = sliderFrame, BackgroundTransparency = 1, Size = UDim2.new(0.4, 0, 0, 20), Text = labelText, Font = Enum.Font.GothamSemibold, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left })
-    local valLbl = Utils.Create("TextLabel", { Parent = sliderFrame, BackgroundTransparency = 1, Size = UDim2.new(0.2, 0, 0, 20), Position = UDim2.new(0.8, 0, 0, 0), Text = tostring(defaultValue), Font = Enum.Font.Code, TextSize = 12, TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Right })
-    
-    local track = Utils.Create("Frame", { Parent = sliderFrame, BackgroundColor3 = Theme.Background, Size = UDim2.new(0.75, 0, 0, 6), Position = UDim2.new(0, 0, 0, 26) }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
-    })
-    local fill = Utils.Create("Frame", { Parent = track, BackgroundColor3 = Theme.Accent, Size = UDim2.new(0, 0, 1, 0) }, { Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-    local thumb = Utils.Create("TextButton", { Parent = track, BackgroundColor3 = Theme.Text, Size = UDim2.new(0, 12, 0, 12), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Text = "" }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }), Utils.Create("UIStroke", { Name = "Glow", Color = Theme.AccentGlow, Thickness = 1.5, Enabled = false })
-    })
-
-    local activeIdx = 1
-    for i, v in ipairs(valuesList) do if v == defaultValue then activeIdx = i break end end
-
-    local function updateToPosition(percentage)
-        percentage = math.clamp(percentage, 0, 1)
-        local idx = math.round(percentage * (#valuesList - 1)) + 1
-        activeIdx = idx
-        valLbl.Text = tostring(valuesList[idx])
-        
-        local targetPercent = (#valuesList > 1) and ((idx - 1) / (#valuesList - 1)) or 0
-        Utils.Tween(fill, { Size = UDim2.new(targetPercent, 0, 1, 0) }, 0.1)
-        Utils.Tween(thumb, { Position = UDim2.new(targetPercent, 0, 0.5, 0) }, 0.1)
-        
-        callback(valuesList[idx])
-    end
-
-    updateToPosition((activeIdx - 1) / (#valuesList - 1))
-
-    thumb.MouseEnter:Connect(function()
-        if SettingsState.BoostFpsMode then return end
-        Utils.Tween(thumb, { Size = UDim2.new(0, 15, 0, 15), BackgroundColor3 = Theme.AccentGlow })
-        thumb.Glow.Enabled = true
-    end)
-    thumb.MouseLeave:Connect(function()
-        Utils.Tween(thumb, { Size = UDim2.new(0, 12, 0, 12), BackgroundColor3 = Theme.Text })
-        thumb.Glow.Enabled = false
-    end)
-
-    local dragging = false
-    thumb.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local trackAbsPos = track.AbsolutePosition.X
-            local trackAbsSize = track.AbsoluteSize.X
-            local mouseX = input.Position.X
-            updateToPosition((mouseX - trackAbsPos) / trackAbsSize)
+        for _, child in pairs(toast:GetChildren()) do
+            if child:IsA("TextLabel") then Utils.Tween(child, { TextTransparency = 1 }, 0.2) end
         end
+        task.wait(0.2)
+        toast:Destroy()
     end)
-
-    local ext = {}
-    function ext:SetDisabled(status)
-        thumb.Visible = not status
-        track.BackgroundTransparency = status and 0.7 or 0
-        fill.BackgroundTransparency = status and 0.7 or 0
-        lbl.TextColor3 = status and Theme.TextMuted or Theme.Text
-        valLbl.TextColor3 = status and Theme.TextMuted or Theme.Accent
-    end
-    function ext:SetValue(val)
-        for i, v in ipairs(valuesList) do
-            if v == val then updateToPosition((i - 1) / (#valuesList - 1)) break end
-        end
-    end
-    return ext
-end
-
-function Components.CreateToggle(parent, labelText, defaultState, callback)
-    local toggleFrame = Utils.Create("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Parent = parent })
-    local lbl = Utils.Create("TextLabel", { Parent = toggleFrame, BackgroundTransparency = 1, Size = UDim2.new(0.6, 0, 1, 0), Text = labelText, Font = Enum.Font.GothamSemibold, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left })
-    
-    local bg = Utils.Create("TextButton", { Parent = toggleFrame, Size = UDim2.new(0, 38, 0, 20), Position = UDim2.new(1, -38, 0.5, -10), BackgroundColor3 = Theme.Background, Text = "" }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
-    })
-    local knob = Utils.Create("Frame", { Parent = bg, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(0, 3, 0.5, -7), BackgroundColor3 = Theme.Text }, { Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-
-    local state = defaultState
-    local function updateVisual(instant)
-        local t = instant and 0 or Utils.GetTweenDuration()
-        if state then
-            Utils.Tween(bg, { BackgroundColor3 = Theme.Accent }, t)
-            Utils.Tween(knob, { Position = UDim2.new(1, -17, 0.5, -7) }, t)
-        else
-            Utils.Tween(bg, { BackgroundColor3 = Theme.Background }, t)
-            Utils.Tween(knob, { Position = UDim2.new(0, 3, 0.5, -7) }, t)
-        end
-    end
-    updateVisual(true)
-
-    bg.Activated:Connect(function()
-        state = not state
-        updateVisual(false)
-        callback(state)
-    end)
-
-    local ext = {}
-    function ext:SetState(s) state = s updateVisual(true) end
-    return ext
-end
-
-function Components.CreatePresetSelector(parent, labelText, currentFormatColor, callback)
-    local frame = Utils.Create("Frame", { Size = UDim2.new(1, 0, 0, 45), BackgroundTransparency = 1, Parent = parent })
-    Utils.Create("TextLabel", { Parent = frame, BackgroundTransparency = 1, Size = UDim2.new(0.4, 0, 0, 20), Text = labelText, Font = Enum.Font.GothamSemibold, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left })
-    
-    local list = Utils.Create("Frame", { Parent = frame, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 22) }, {
-        Utils.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) })
-    })
-    
-    local presets = {
-        {Name = "Red", Color = Color3.fromRGB(230, 35, 35)},
-        {Name = "Blue", Color = Color3.fromRGB(35, 120, 230)},
-        {Name = "Purple", Color = Color3.fromRGB(150, 35, 230)},
-        {Name = "Green", Color = Color3.fromRGB(35, 200, 80)},
-        {Name = "Cyan", Color = Color3.fromRGB(35, 200, 220)},
-        {Name = "White", Color = Color3.fromRGB(240, 240, 240)}
-    }
-
-    for _, p in ipairs(presets) do
-        local pBtn = Utils.Create("TextButton", { Parent = list, Size = UDim2.new(0, 18, 0, 18), BackgroundColor3 = p.Color, Text = "" }, {
-            Utils.Create("UICorner", { CornerRadius = UDim.new(1, 0) }),
-            Utils.Create("UIStroke", { Name = "S", Color = Theme.Text, Thickness = 1.5, Enabled = (p.Color == currentFormatColor) })
-        })
-        pBtn.Activated:Connect(function()
-            for _, child in pairs(list:GetChildren()) do if child:IsA("TextButton") then child.S.Enabled = false end end
-            pBtn.S.Enabled = true
-            callback(p.Color)
-        end)
-    end
-    return list
-end
-
-function Components.CreateKeybindButton(parent, labelText, defaultKey, callback)
-    local frame = Utils.Create("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Parent = parent })
-    Utils.Create("TextLabel", { Parent = frame, BackgroundTransparency = 1, Size = UDim2.new(0.5, 0, 1, 0), Text = labelText, Font = Enum.Font.GothamSemibold, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left })
-    
-    local btn = Utils.Create("TextButton", { Parent = frame, BackgroundColor3 = Theme.Panel, Size = UDim2.new(0, 100, 0, 22), Position = UDim2.new(1, -100, 0.5, -11), Text = defaultKey.Name, Font = Enum.Font.Code, TextSize = 11, TextColor3 = Theme.Accent }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(0, 4) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
-    })
-
-    local listening = false
-    btn.Activated:Connect(function()
-        if listening then return end
-        listening = true
-        btn.Text = "..."
-        btn.TextColor3 = Theme.Warning
-        
-        local conn
-        conn = UserInputService.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                conn:Disconnect()
-                listening = false
-                btn.Text = input.KeyCode.Name
-                btn.TextColor3 = Theme.Accent
-                callback(input.KeyCode)
-            end
-        end)
-    end)
-    
-    local ext = {}
-    function ext:SetKey(k) btn.Text = k.Name end
-    return ext
 end
 
 --====================================================
--- 8. WORKSPACE TAB ARCHITECTURE OBJECTS
+-- 6. WORKSPACE CLASS & INSTANCE MANAGER
 --====================================================
-local WorkspaceManager = { Workspaces = {}, ActiveWorkspace = nil, TabCount = 0, PendingCloseWs = nil }
+local WorkspaceManager = {
+    Workspaces = {},
+    ActiveWorkspace = nil,
+    TabCount = 0,
+    PendingCloseWs = nil
+}
+
 local Workspace = {}
 Workspace.__index = Workspace
 
@@ -524,37 +324,81 @@ function Workspace.new(id)
     self.StartTime = 0
     self.Runtime = 0
     self.TotalCalls = 0
-    self.Status = "STOPPED"
-    self.Logs = {}
+    self.Status = "STOPPED" -- "STOPPED", "RUNNING", "ERROR"
+    self.Logs = {} -- Structure of {text, type, time}
+    
     self.SpamThread = nil
     self.LastError = ""
+
     self:CreateTabUI()
     return self
 end
 
 function Workspace:CreateTabUI()
-    self.TabUI = Utils.Create("Frame", { Name = "Tab_" .. self.Id, Size = UDim2.new(0, 85, 1, -4), BackgroundColor3 = Theme.TabStopped, BorderSizePixel = 0 }, {
+    self.TabUI = Utils.Create("Frame", {
+        Name = "Tab_" .. self.Id,
+        Size = UDim2.new(0, 85, 1, -4),
+        BackgroundColor3 = Theme.TabStopped,
+        BorderSizePixel = 0
+    }, {
         Utils.Create("UICorner", { CornerRadius = UDim.new(0, 4) }),
         Utils.Create("UIStroke", { Name = "ActiveStroke", Color = Theme.AccentGlow, Thickness = 1.5, Enabled = false }),
-        Utils.Create("TextButton", { Name = "SelectBtn", BackgroundTransparency = 1, Size = UDim2.new(1, -22, 1, 0), Position = UDim2.new(0, 5, 0, 0), Text = "Tab " .. self.Id, Font = Enum.Font.GothamSemibold, TextSize = 10, TextColor3 = Theme.Text }),
-        Utils.Create("TextButton", { Name = "CloseBtn", BackgroundTransparency = 1, Size = UDim2.new(0, 16, 0, 16), Position = UDim2.new(1, -18, 0.5, -8), Text = "×", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Theme.TextMuted })
+        Utils.Create("TextButton", {
+            Name = "SelectBtn",
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -22, 1, 0),
+            Position = UDim2.new(0, 5, 0, 0),
+            Text = "Workspace " .. self.Id,
+            Font = Enum.Font.GothamSemibold,
+            TextSize = 10,
+            TextColor3 = Theme.Text
+        }),
+        Utils.Create("TextButton", {
+            Name = "CloseBtn",
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 16, 0, 16),
+            Position = UDim2.new(1, -18, 0.5, -8),
+            Text = "×",
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextColor3 = Theme.TextMuted
+        })
     })
-    self.TabUI.SelectBtn.Activated:Connect(function() WorkspaceManager.SwitchTab(self) end)
-    self.TabUI.CloseBtn.Activated:Connect(function() WorkspaceManager.CloseTabTrigger(self) end)
+
+    -- Hover effect
+    self.TabUI.MouseEnter:Connect(function()
+        if WorkspaceManager.ActiveWorkspace ~= self then
+            Utils.Tween(self.TabUI, { BackgroundColor3 = self.TabUI.BackgroundColor3:Lerp(Color3.fromRGB(255,255,255), 0.1) }, 0.1)
+        end
+    end)
+    self.TabUI.MouseLeave:Connect(function()
+        self:UpdateVisual()
+    end)
+
+    -- Tab Interactions
+    self.TabUI.SelectBtn.Activated:Connect(function()
+        WorkspaceManager.SwitchTab(self)
+    end)
+
+    self.TabUI.CloseBtn.Activated:Connect(function()
+        WorkspaceManager.CloseTabTrigger(self)
+    end)
 end
 
 function Workspace:UpdateVisual()
     if not self.TabUI then return end
+    
+    -- Outline Indicator untuk Tab Aktif
     local isActive = (WorkspaceManager.ActiveWorkspace == self)
     self.TabUI.ActiveStroke.Enabled = isActive
-    if self.Status == "RUNNING" then self.TabUI.BackgroundColor3 = Theme.TabRunning
-    elseif self.Status == "ERROR" then self.TabUI.BackgroundColor3 = Theme.TabError
-    else self.TabUI.BackgroundColor3 = isActive and Theme.Panel or Theme.TabStopped end
-    
-    if SettingsState.CompactMode then
-        self.TabUI.Size = UDim2.new(0, 75, 1, -2)
+
+    -- Status Color Mapping
+    if self.Status == "RUNNING" then
+        self.TabUI.BackgroundColor3 = Theme.TabRunning
+    elseif self.Status == "ERROR" then
+        self.TabUI.BackgroundColor3 = Theme.TabError
     else
-        self.TabUI.Size = UDim2.new(0, 85, 1, -4)
+        self.TabUI.BackgroundColor3 = isActive and Theme.Panel or Theme.TabStopped
     end
 end
 
@@ -562,78 +406,128 @@ function Workspace:Log(text, logType)
     logType = logType or "INFO"
     local rawTime = os.date("%H:%M:%S")
     table.insert(self.Logs, { text = text, type = logType, time = rawTime })
-    if #self.Logs > Config.MaxConsoleLogs then table.remove(self.Logs, 1) end
-    if WorkspaceManager.ActiveWorkspace == self and AppState.CurrentView == "Workspace" then
+
+    if #self.Logs > Config.MaxConsoleLogs then
+        table.remove(self.Logs, 1)
+    end
+
+    -- Render ke UI Console jika Tab ini sedang aktif dibuka
+    if WorkspaceManager.ActiveWorkspace == self then
         WorkspaceManager.RenderLogItem(text, logType, rawTime)
     end
 end
 
+function Workspace:ClearLogs()
+    self.Logs = {}
+    if WorkspaceManager.ActiveWorkspace == self then
+        for _, child in pairs(ConsoleFrame:GetChildren()) do
+            if child:IsA("TextLabel") then child:Destroy() end
+        end
+        ConsoleFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    end
+end
+
+--====================================================
+-- 7. EXECUTOR (CORE ALGORITHM - PARALLEL ISOLATION)
+--====================================================
 function Workspace:Start()
     if self.Script:gsub("%s+", "") == "" then
         Notification.Notify("Script Warning", "Workspace code cannot be empty!", "Warning")
         return
     end
+
     local compiledFunc, err = loadstring(self.Script)
     if not compiledFunc then
-        self.Status = "ERROR" self:UpdateVisual()
+        self.Status = "ERROR"
+        self:UpdateVisual()
         self:Log("Compilation Error: " .. tostring(err), "ERROR")
+        Notification.Notify("Compilation Failed", "Workspace " .. self.Id .. " syntax error.", "Error")
         return
     end
-    self.IsRunning = true self.Status = "RUNNING" self:UpdateVisual()
-    self.StartTime = tick() - self.Runtime
-    self:Log("Execution Deployed.", "SUCCESS")
 
-    -- SYSTEM LOOP ALGORITMA INTI (TIDAK BERUBAH)
+    self.IsRunning = true
+    self.Status = "RUNNING"
+    self:UpdateVisual()
+    
+    self.StartTime = tick() - self.Runtime -- Memungkinkan hitungan resume yang presisi
+    self:Log("Execution Started (Threads: " .. self.Threads .. " | Delay: " .. self.Delay .. "s)", "SUCCESS")
+
+    -- CORE ALGORITHM LOOP RUNTIME (Diproteksi secara independen per tab)
     self.SpamThread = task.spawn(function()
         while self.IsRunning do
             for i = 1, self.Threads do
                 task.spawn(function()
                     local success, execErr = pcall(compiledFunc)
-                    if success then self.TotalCalls = self.TotalCalls + 1
+                    if success then
+                        self.TotalCalls = self.TotalCalls + 1
                     else
                         if self.LastError ~= execErr then
                             self.LastError = tostring(execErr)
                             self:Log("Runtime Error: " .. self.LastError, "ERROR")
-                            self.Status = "ERROR" task.spawn(function() self:UpdateVisual() end)
+                            self.Status = "ERROR"
+                            task.spawn(function() self:UpdateVisual() end)
                         end
                     end
                 end)
             end
-            if self.Delay <= 0 then RunService.Heartbeat:Wait() else task.wait(self.Delay) end
+
+            if self.Delay <= 0 then
+                RunService.Heartbeat:Wait()
+            else
+                task.wait(self.Delay)
+            end
         end
     end)
 end
 
 function Workspace:Stop()
-    self.IsRunning = false self.Status = "STOPPED" self:UpdateVisual()
-    self:Log("Execution Paused.", "WARN")
+    self.IsRunning = false
+    self.Status = "STOPPED"
+    self:UpdateVisual()
+    self:Log("Execution Stopped.", "WARN")
     self.SpamThread = nil
 end
 
-function Workspace:Destroy() self:Stop() if self.TabUI then self.TabUI:Destroy() end end
+function Workspace:Destroy()
+    self:Stop()
+    if self.TabUI then
+        self.TabUI:Destroy()
+    end
+end
 
 --====================================================
--- 9. WORKSPACE MANAGEMENT CONTROLLER
+-- 8. WORKSPACE MANAGER LOGIC
 --====================================================
 function WorkspaceManager.CreateTab()
     if WorkspaceManager.TabCount >= Config.MaxTabs then
         Notification.Notify("Limit Reached", "Max limit is 10 parallel workspaces.", "Error")
         return
     end
-    local id = 1 while WorkspaceManager.Workspaces[id] ~= nil do id = id + 1 end
+
+    -- Mencari Unused ID
+    local id = 1
+    while WorkspaceManager.Workspaces[id] ~= nil do
+        id = id + 1
+    end
+
     local ws = Workspace.new(id)
     WorkspaceManager.Workspaces[id] = ws
     WorkspaceManager.TabCount = WorkspaceManager.TabCount + 1
+
+    -- Parent tab UI ke scrolling container
     ws.TabUI.Parent = TabScrollingFrame
+    
+    -- Menyesuaikan lebar Canvas scrolling tab bar
     TabScrollingFrame.CanvasSize = UDim2.new(0, TabScrollingFrame.UIListLayout.AbsoluteContentSize.X + 60, 1, 0)
+
     WorkspaceManager.SwitchTab(ws)
-    ws:Log("Workspace Ready.", "INFO")
+    ws:Log("Workspace Initialized.", "INFO")
 end
 
 function WorkspaceManager.SwitchTab(targetWs)
-    if AppState.CurrentView == "Settings" then _G.NavigationBack() end
     if WorkspaceManager.ActiveWorkspace == targetWs then return end
-    
+
+    -- 1. Menyimpan data UI Input saat ini ke Workspace lama
     local prevWs = WorkspaceManager.ActiveWorkspace
     if prevWs then
         prevWs.Script = ScriptInput.Text
@@ -642,25 +536,34 @@ function WorkspaceManager.SwitchTab(targetWs)
     end
 
     WorkspaceManager.ActiveWorkspace = targetWs
+
+    -- 2. Memperbarui Visual Indikator Tab
     if prevWs then prevWs:UpdateVisual() end
     targetWs:UpdateVisual()
 
+    -- 3. Memuat data Workspace baru ke UI Input
     ScriptInput.Text = targetWs.Script
     ThreadsInput.Text = tostring(targetWs.Threads)
     DelayInput.Text = tostring(targetWs.Delay)
 
-    for _, child in pairs(ConsoleFrame:GetChildren()) do if child:IsA("TextLabel") then child:Destroy() end end
-    for _, logItem in ipairs(targetWs.Logs) do WorkspaceManager.RenderLogItem(logItem.text, logItem.type, logItem.time) end
+    -- 4. Me-render ulang daftar Console Logs milik Workspace baru
+    for _, child in pairs(ConsoleFrame:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+
+    for _, logItem in ipairs(targetWs.Logs) do
+        WorkspaceManager.RenderLogItem(logItem.text, logItem.type, logItem.time)
+    end
+
     WorkspaceManager.UpdateActiveUI()
+    Footer.Text = Config.Version .. " | Active Workspace: " .. targetWs.Id
 end
 
 function WorkspaceManager.CloseTabTrigger(ws)
     if ws.IsRunning then
         WorkspaceManager.PendingCloseWs = ws
-        _G.ShowGlobalDialog("Executor session active.\nAre you sure you want to terminate this tab?", function()
-            WorkspaceManager.CloseTabDirect(WorkspaceManager.PendingCloseWs)
-            WorkspaceManager.PendingCloseWs = nil
-        end)
+        ConfirmOverlay.Visible = true
+        Utils.Tween(ConfirmOverlay, { BackgroundTransparency = 0.4 }, 0.2)
     else
         WorkspaceManager.CloseTabDirect(ws)
     end
@@ -671,10 +574,23 @@ function WorkspaceManager.CloseTabDirect(ws)
     WorkspaceManager.Workspaces[ws.Id] = nil
     WorkspaceManager.TabCount = WorkspaceManager.TabCount - 1
 
+    -- Jika tab yang ditutup adalah Tab Aktif saat ini, pindahkan ke tab yang tersedia
     if WorkspaceManager.ActiveWorkspace == ws then
-        local nextWs = nil for _, o in pairs(WorkspaceManager.Workspaces) do nextWs = o break end
-        if nextWs then WorkspaceManager.SwitchTab(nextWs) else WorkspaceManager.ActiveWorkspace = nil WorkspaceManager.CreateTab() end
+        local nextWs = nil
+        for _, otherWs in pairs(WorkspaceManager.Workspaces) do
+            nextWs = otherWs
+            break
+        end
+
+        if nextWs then
+            WorkspaceManager.SwitchTab(nextWs)
+        else
+            -- Jika semua tab ditutup, otomatis buat 1 tab baru kosong agar UI tidak pincang
+            WorkspaceManager.ActiveWorkspace = nil
+            WorkspaceManager.CreateTab()
+        end
     end
+
     TabScrollingFrame.CanvasSize = UDim2.new(0, TabScrollingFrame.UIListLayout.AbsoluteContentSize.X + 60, 1, 0)
 end
 
@@ -684,260 +600,102 @@ function WorkspaceManager.RenderLogItem(text, logType, logTime)
     elseif logType == "SUCCESS" then col = Theme.Success
     elseif logType == "WARN" then col = Theme.Warning end
 
-    Utils.Create("TextLabel", { Parent = ConsoleFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 14), Text = string.format("[%s] %s", logTime, text), Font = Enum.Font.Code, TextSize = 10, TextColor3 = col, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true })
+    Utils.Create("TextLabel", {
+        Parent = ConsoleFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 14),
+        Text = string.format("[%s] %s", logTime, text),
+        Font = Enum.Font.Code, TextSize = 10, TextColor3 = col, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true
+    })
+
     ConsoleFrame.CanvasSize = UDim2.new(0, 0, 0, ConsoleFrame.UIListLayout.AbsoluteContentSize.Y + 10)
-    if ConsoleFrame.CanvasSize.Y.Offset > ConsoleFrame.AbsoluteSize.Y then
-        ConsoleFrame.CanvasPosition = Vector2.new(0, ConsoleFrame.CanvasSize.Y.Offset)
-    end
+    ConsoleFrame.CanvasPosition = Vector2.new(0, ConsoleFrame.CanvasSize.Y.Offset)
 end
 
 function WorkspaceManager.UpdateActiveUI()
-    local ws = WorkspaceManager.ActiveWorkspace if not ws then return end
+    local ws = WorkspaceManager.ActiveWorkspace
+    if not ws then return end
+
+    -- Sinkronisasi tombol start/stop
     if ws.IsRunning then
-        LblStatus.Text = "Status: RUNNING" LblStatus.TextColor3 = Theme.Success SpamBtn.Text = "STOP ATTACK" SpamBtn.BackgroundColor3 = Theme.Panel
-        if not SpamBtn:FindFirstChild("S") then Utils.Create("UIStroke", { Parent = SpamBtn, Color = Theme.Accent, Thickness = 1.5, Name = "S" }) end
+        LblStatus.Text = "Status: RUNNING"
+        LblStatus.TextColor3 = Theme.Success
+        SpamBtn.Text = "STOP ATTACK"
+        SpamBtn.BackgroundColor3 = Theme.Panel
+        if not SpamBtn:FindFirstChild("BtnStroke") then
+            Utils.Create("UIStroke", { Parent = SpamBtn, Color = Theme.Accent, Thickness = 1.5, Name = "BtnStroke" })
+        end
     else
         LblStatus.Text = ws.Status == "ERROR" and "Status: ERROR" or "Status: STOPPED"
         LblStatus.TextColor3 = ws.Status == "ERROR" and Theme.Error or Theme.TextMuted
-        SpamBtn.Text = "DEPLOY ALL TROOPS" SpamBtn.BackgroundColor3 = Theme.Accent if SpamBtn:FindFirstChild("S") then SpamBtn.S:Destroy() end
+        SpamBtn.Text = "DEPLOY ALL TROOPS"
+        SpamBtn.BackgroundColor3 = Theme.Accent
+        if SpamBtn:FindFirstChild("BtnStroke") then SpamBtn.BtnStroke:Destroy() end
     end
 end
 
 --====================================================
--- 10. ADVANCED SETTINGS SYSTEM INTERNALS
---====================================================
-local SystemSettings = {}
-local SliderGuiScale, SliderOpacity, SliderBlur, SliderAnimSpeed
-local ToggleRainbow, ToggleCompact, ToggleFps
-local PresetColorSelector, BindToggleGui, BindOpenSettings
-
--- Core Hardware Blur Integration
-local BlurEffectInstance = Lighting:FindFirstChild("SpammerBlurEffect")
-local isBlurSupported = pcall(function()
-    if not BlurEffectInstance then
-        BlurEffectInstance = Instance.new("BlurEffect")
-        BlurEffectInstance.Name = "SpammerBlurEffect"
-        BlurEffectInstance.Size = 0
-        BlurEffectInstance.Parent = Lighting
-    end
-end)
-
-function SystemSettings.ApplySettings(key, value)
-    SettingsState[key] = value
-    
-    if key == "GuiScale" then
-        MainFrame.GlobalScale.Scale = value
-    elseif key == "BackgroundOpacity" then
-        local transparency = value / 100
-        MainFrame.BackgroundTransparency = transparency
-        Header.BackgroundTransparency = transparency
-        SettingsView.BackgroundTransparency = transparency
-    elseif key == "BorderColor" then
-        if not SettingsState.RainbowBorder then
-            MainFrame.WindowBorder.Color = value
-        end
-    elseif key == "UiBlur" then
-        if isBlurSupported and BlurEffectInstance then
-            BlurEffectInstance.Size = (value / 100) * 24
-        end
-    elseif key == "CompactMode" then
-        if value then
-            TabBarFrame.Size = UDim2.new(1, 0, 0, 26)
-            Body.Size = UDim2.new(1, -20, 1, -90)
-            Body.Position = UDim2.new(0, 10, 0, 75)
-            ScriptInput.Size = UDim2.new(1, 0, 1, -30)
-            ConfigContainer.Size = UDim2.new(1, 0, 0, 25)
-            ConfigContainer.Position = UDim2.new(0, 0, 1, -25)
-        else
-            TabBarFrame.Size = UDim2.new(1, 0, 0, 35)
-            Body.Size = UDim2.new(1, -20, 1, -105)
-            Body.Position = UDim2.new(0, 10, 0, 85)
-            ScriptInput.Size = UDim2.new(1, 0, 1, -45)
-            ConfigContainer.Size = UDim2.new(1, 0, 0, 35)
-            ConfigContainer.Position = UDim2.new(0, 0, 1, -35)
-        end
-        for _, ws in pairs(WorkspaceManager.Workspaces) do ws:UpdateVisual() end
-    elseif key == "BoostFpsMode" then
-        if value then
-            ToggleRainbow:SetState(false) SettingsState.RainbowBorder = false
-            MainFrame.WindowBorder.Color = SettingsState.BorderColor
-            Config.UpdateRate = 0.5
-        else
-            Config.UpdateRate = 0.1
-        end
-    end
-end
-
-function SystemSettings.Initialize()
-    -- Category: Appearance
-    Components.CreateCategory(SettingsScroll, "Appearance")
-    SliderGuiScale = Components.CreateSlider(SettingsScroll, "GUI Scale", {0.8, 0.9, 1.0, 1.1, 1.25, 1.5}, SettingsState.GuiScale, function(v) SystemSettings.ApplySettings("GuiScale", v) end)
-    SliderOpacity = Components.CreateSlider(SettingsScroll, "Background Opacity", {0, 20, 40, 60, 80, 100}, SettingsState.BackgroundOpacity, function(v) SystemSettings.ApplySettings("BackgroundOpacity", v) end)
-    
-    PresetColorSelector = Components.CreatePresetSelector(SettingsScroll, "Border Color Preset", SettingsState.BorderColor, function(v) SystemSettings.ApplySettings("BorderColor", v) end)
-    ToggleRainbow = Components.CreateToggle(SettingsScroll, "Rainbow Border Effect", SettingsState.RainbowBorder, function(v) 
-        SystemSettings.ApplySettings("RainbowBorder", v)
-    end)
-    
-    SliderBlur = Components.CreateSlider(SettingsScroll, "UI Screen Blur Strength", {0, 20, 40, 60, 80, 100}, SettingsState.UiBlur, function(v) SystemSettings.ApplySettings("UiBlur", v) end)
-    if not isBlurSupported then SliderBlur:SetDisabled(true) end
-
-    -- Category: Animation
-    Components.CreateCategory(SettingsScroll, "Animation")
-    SliderAnimSpeed = Components.CreateSlider(SettingsScroll, "System Animation Speed", {"Slow", "Normal", "Fast"}, SettingsState.AnimationSpeed, function(v) SystemSettings.ApplySettings("AnimationSpeed", v) end)
-
-    -- Category: Behavior & Optimization
-    Components.CreateCategory(SettingsScroll, "Behavior")
-    ToggleCompact = Components.CreateToggle(SettingsScroll, "Compact Interface Mode", SettingsState.CompactMode, function(v) SystemSettings.ApplySettings("CompactMode", v) end)
-    ToggleFps = Components.CreateToggle(SettingsScroll, "Boost FPS Optimization", SettingsState.BoostFpsMode, function(v) SystemSettings.ApplySettings("BoostFpsMode", v) end)
-
-    -- Category: Controls Keybind
-    Components.CreateCategory(SettingsScroll, "Controls Keybind")
-    BindToggleGui = Components.CreateKeybindButton(SettingsScroll, "Show / Hide Jendela GUI", SettingsState.Keybinds.ToggleGui, function(v) SettingsState.Keybinds.ToggleGui = v end)
-    BindOpenSettings = Components.CreateKeybindButton(SettingsScroll, "Open Settings View Panel", SettingsState.Keybinds.OpenSettings, function(v) SettingsState.Keybinds.OpenSettings = v end)
-
-    -- Factory Reset Buttons
-    local resetBtn = Utils.Create("TextButton", { Parent = SettingsScroll, BackgroundColor3 = Theme.Panel, Size = UDim2.new(1, 0, 0, 35), Text = "Reset Settings to Factory Defaults", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Theme.Error }, {
-        Utils.Create("UICorner", { CornerRadius = UDim.new(0, 6) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
-    })
-    resetBtn.Activated:Connect(function()
-        _G.ShowGlobalDialog("Reset all system adjustments to factory defaults?", function()
-            for k, v in pairs(DefaultSettings) do SettingsState[k] = v end
-            
-            -- Sync Visual Slider Elements
-            SliderGuiScale:SetValue(SettingsState.GuiScale)
-            SliderOpacity:SetValue(SettingsState.BackgroundOpacity)
-            SliderBlur:SetValue(SettingsState.UiBlur)
-            SliderAnimSpeed:SetValue(SettingsState.AnimationSpeed)
-            ToggleRainbow:SetState(SettingsState.RainbowBorder)
-            ToggleCompact:SetState(SettingsState.CompactMode)
-            ToggleFps:SetState(SettingsState.BoostFpsMode)
-            BindToggleGui:SetKey(SettingsState.Keybinds.ToggleGui)
-            BindOpenSettings:SetKey(SettingsState.Keybinds.OpenSettings)
-            
-            -- Apply Global Modifications
-            for k, v in pairs(SettingsState) do SystemSettings.ApplySettings(k, v) end
-            Notification.Notify("Factory Reset", "Settings have been reset to default values.", "Warning")
-        end)
-    end)
-    
-    -- Rainbow Border Logic Runner
-    local hue = 0
-    local rainbowConn = RunService.Heartbeat:Connect(function(dt)
-        if SettingsState.RainbowBorder and not SettingsState.BoostFpsMode then
-            hue = (hue + (dt * 0.05)) % 1
-            MainFrame.WindowBorder.Color = Color3.fromHSV(hue, 0.8, 0.9)
-        end
-    end)
-    table.insert(AppState.Connections, rainbowConn)
-end
-
---====================================================
--- 11. NAVIGATION CONTROLLER FLOW
---====================================================
-local function TransitionView(toSettings)
-    if toSettings then
-        AppState.CurrentView = "Settings"
-        Header.Title.Visible = false
-        Header.BackBtn.Visible = true
-        SettingsNavBtn.Visible = false
-        SettingsView.Visible = true
-        
-        Utils.Tween(SettingsView, { Position = UDim2.new(0, 0, 0, 40) })
-        Utils.Tween(WorkspaceView, { Position = UDim2.new(0, -600, 0, 40) })
-        task.delay(Utils.GetTweenDuration(), function() if AppState.CurrentView == "Settings" then WorkspaceView.Visible = false end end)
-    else
-        AppState.CurrentView = "Workspace"
-        Header.Title.Visible = true
-        Header.BackBtn.Visible = false
-        SettingsNavBtn.Visible = true
-        WorkspaceView.Visible = true
-        
-        Utils.Tween(SettingsView, { Position = UDim2.new(0, 600, 0, 40) })
-        Utils.Tween(WorkspaceView, { Position = UDim2.new(0, 0, 0, 40) })
-        task.delay(Utils.GetTweenDuration(), function() if AppState.CurrentView == "Workspace" then SettingsView.Visible = false end end)
-        WorkspaceManager.UpdateActiveUI()
-    end
-end
-
-function _G.NavigationBack() TransitionView(false) end
-
---====================================================
--- 12. FLOATING OVERLAY & DIALOG RUNTIME MODAL
---====================================================
-local activeDialogCallback = nil
-
-function _G.ShowGlobalDialog(textText, onConfirmCallback)
-    activeDialogCallback = onConfirmCallback
-    ModalOverlay.DialogCard.Desc.Text = textText
-    ModalOverlay.DialogCard.Size = UDim2.new(0, 340, 0, 40)
-    ModalOverlay.Visible = true
-    
-    Utils.Tween(ModalOverlay, { BackgroundTransparency = 0.4 })
-    Utils.Tween(ModalOverlay.DialogCard, { Size = UDim2.new(0, 340, 0, 150) })
-end
-
-local function HideGlobalDialog()
-    Utils.Tween(ModalOverlay, { BackgroundTransparency = 1 })
-    Utils.Tween(ModalOverlay.DialogCard, { Size = UDim2.new(0, 340, 0, 0) })
-    task.wait(Utils.GetTweenDuration())
-    ModalOverlay.Visible = false
-    activeDialogCallback = nil
-end
-
-ModalOverlay.DialogCard.Cancel.Activated:Connect(HideGlobalDialog)
-ModalOverlay.DialogCard.Confirm.Activated:Connect(function()
-    if activeDialogCallback then activeDialogCallback() end
-    HideGlobalDialog()
-end)
-
---====================================================
--- 13. INTERFACE MINIMIZE, SHUTDOWN AND RECOVERY
+-- 9. MAIN WINDOW CONTROL FLOW (OPEN, CLOSE, MINIMIZE)
 --====================================================
 local function Minimize()
-    Utils.Tween(MainFrame, { Size = UDim2.new(0, 600, 0, 0), Position = UDim2.new(0.5, -300, 0.5, 0) }, 0.2)
-    task.wait(0.2)
+    Utils.Tween(MainFrame, { Size = UDim2.new(0, 600, 0, 0), Position = UDim2.new(0.5, -300, 0.5, 0) }, 0.25)
+    task.wait(0.25)
     MainFrame.Visible = false
     FloatBtn.Visible = true
-    FloatBtn.Position = AppState.FloatPosition
+    FloatBtn.Position = UDim2.new(0.05, 0, 0.5, -21)
 end
 
 function _G.RestoreMainWindow()
     FloatBtn.Visible = false
     MainFrame.Visible = true
-    Utils.Tween(MainFrame, { Size = UDim2.new(0, 600, 0, 420), Position = UDim2.new(0.5, -300, 0.5, -210) }, 0.2)
-end
-
-local function MasterShutdown()
-    -- 1. Hentikan Seluruh Workspace Core Loop Threads
-    for _, ws in pairs(WorkspaceManager.Workspaces) do ws:Stop() ws:Destroy() end
-    -- 2. Bersihkan Seluruh Event Connections Listener
-    for _, conn in pairs(AppState.Connections) do conn:Disconnect() end
-    -- 3. Batalkan Seluruh Animasi Tweens Aktif
-    for _, tw in pairs(AppState.ActiveTweens) do tw:Cancel() end
-    -- 4. Kembalikan Efek Kamera Pencahayaan
-    if BlurEffectInstance then BlurEffectInstance:Destroy() end
-    
-    -- 5. Hancurkan Element Sisa Interface Core Visual
-    GUI:Destroy()
+    Utils.Tween(MainFrame, { Size = UDim2.new(0, 600, 0, 420), Position = UDim2.new(0.5, -300, 0.5, -210) }, 0.25)
 end
 
 --====================================================
--- 14. EVENT HANDLER BINDINGS
+-- 10. SYSTEM GLOBAL THREAD (UI REFRESHER)
 --====================================================
-SettingsNavBtn.Activated:Connect(function() TransitionView(true) end)
-Header.BackBtn.Activated:Connect(function() TransitionView(false) end)
-MinBtn.Activated:Connect(Minimize)
-
-CloseBtn.Activated:Connect(function()
-    _G.ShowGlobalDialog("Are you sure you want to exit and close the executive panel application?", function()
-        MasterShutdown()
-    end)
+task.spawn(function()
+    while true do
+        local ws = WorkspaceManager.ActiveWorkspace
+        if ws then
+            if ws.IsRunning then
+                ws.Runtime = tick() - ws.StartTime
+            end
+            LblRuntime.Text = "Runtime: " .. Utils.FormatTime(ws.Runtime)
+            LblCalls.Text = "Total Executed: " .. tostring(ws.TotalCalls)
+            
+            -- Terus-menerus memperbarui teks di status card
+            WorkspaceManager.UpdateActiveUI()
+        end
+        task.wait(Config.UpdateRate)
+    end
 end)
 
+--====================================================
+-- 11. BINDINGS & CONNECTIONS
+--====================================================
+
+-- Add Tab Button [+]
+local AddTabButton = Utils.Create("TextButton", {
+    Parent = TabScrollingFrame, Size = UDim2.new(0, 26, 1, -4),
+    BackgroundColor3 = Theme.Panel, Text = "+", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Accent,
+    LayoutOrder = 999999 -- Pastikan selalu berada di ujung kanan
+}, {
+    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 4) }),
+    Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
+})
+
+AddTabButton.Activated:Connect(function()
+    WorkspaceManager.CreateTab()
+end)
+
+-- Start / Stop Button Action
 SpamBtn.Activated:Connect(function()
-    local ws = WorkspaceManager.ActiveWorkspace if not ws then return end
-    if ws.IsRunning then ws:Stop() else
+    local ws = WorkspaceManager.ActiveWorkspace
+    if not ws then return end
+
+    if ws.IsRunning then
+        ws:Stop()
+    else
+        -- Update state input ke object tab sebelum start
         ws.Script = ScriptInput.Text
         ws.Threads = tonumber(ThreadsInput.Text) or 1
         ws.Delay = tonumber(DelayInput.Text) or 0
@@ -945,56 +703,69 @@ SpamBtn.Activated:Connect(function()
     end
 end)
 
-ConsoleFrame.Parent.ConsoleHeaderFrame.ClearBtn.Activated:Connect(function()
-    local ws = WorkspaceManager.ActiveWorkspace if ws then ws:ClearLogs() end
+-- Hover Visual Action Buttons
+SpamBtn.MouseEnter:Connect(function()
+    local ws = WorkspaceManager.ActiveWorkspace
+    if ws and not ws.IsRunning then Utils.Tween(SpamBtn, { BackgroundColor3 = Theme.Accent:Lerp(Color3.new(1,1,1), 0.1) }, 0.1) end
+end)
+SpamBtn.MouseLeave:Connect(function()
+    local ws = WorkspaceManager.ActiveWorkspace
+    if ws and not ws.IsRunning then Utils.Tween(SpamBtn, { BackgroundColor3 = Theme.Accent }, 0.1) end
 end)
 
--- Global Keyboard Input Binding Interceptor
-local globalKeybindConn = UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == SettingsState.Keybinds.ToggleGui then
-            if MainFrame.Visible then Minimize() else _G.RestoreMainWindow() end
-        elseif input.KeyCode == SettingsState.Keybinds.OpenSettings then
-            if AppState.CurrentView == "Workspace" then TransitionView(true) else TransitionView(false) end
-        end
+-- Clear Console Button
+ConsoleHeaderFrame.ClearBtn.Activated:Connect(function()
+    local ws = WorkspaceManager.ActiveWorkspace
+    if ws then ws:ClearLogs() end
+end)
+
+-- Window Minimize & Kill Active Connections
+MinBtn.Activated:Connect(Minimize)
+
+CloseBtn.Activated:Connect(function()
+    -- Menghentikan seluruh proses background workspace saat UI dimatikan total
+    for _, ws in pairs(WorkspaceManager.Workspaces) do
+        ws:Stop()
     end
+    Utils.Tween(MainFrame, { Size = UDim2.new(0, 600, 0, 0) }, 0.25)
+    task.wait(0.25)
+    GUI:Destroy()
 end)
-table.insert(AppState.Connections, globalKeybindConn)
 
--- Numeric Formats Sanitizer
-local function SetupNumericSanitizer(box, isFloat)
-    box:GetPropertyChangedSignal("Text"):Connect(function()
-        box.Text = isFloat and box.Text:gsub("[^%d%.]", "") or box.Text:gsub("%D", "")
+-- Close Dialog Modal Events
+ConfirmOverlay.ConfirmBtn.Activated:Connect(function()
+    local pendingWs = WorkspaceManager.PendingCloseWs
+    if pendingWs then
+        WorkspaceManager.CloseTabDirect(pendingWs)
+        WorkspaceManager.PendingCloseWs = nil
+    end
+    Utils.Tween(ConfirmOverlay, { BackgroundTransparency = 1 }, 0.15)
+    task.wait(0.15)
+    ConfirmOverlay.Visible = false
+end)
+
+ConfirmOverlay.CancelBtn.Activated:Connect(function()
+    WorkspaceManager.PendingCloseWs = nil
+    Utils.Tween(ConfirmOverlay, { BackgroundTransparency = 1 }, 0.15)
+    task.wait(0.15)
+    ConfirmOverlay.Visible = false
+end)
+
+-- Validasi TextBox Inputs (Hanya angka desimal dan bulat)
+local function ValidateNumericBox(textBox, allowFloat)
+    textBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if allowFloat then
+            textBox.Text = textBox.Text:gsub("[^%d%.]", "") -- Filter non-angka dan non-titik
+        else
+            textBox.Text = textBox.Text:gsub("%D", "") -- Hanya angka bulat
+        end
     end)
 end
-SetupNumericSanitizer(ThreadsInput, false)
-SetupNumericSanitizer(DelayInput, true)
-
--- Add Tab [+] Action Button
-local AddTabBtn = Utils.Create("TextButton", { Parent = TabScrollingFrame, Size = UDim2.new(0, 26, 1, -4), BackgroundColor3 = Theme.Panel, Text = "+", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Accent, LayoutOrder = 99999 }, {
-    Utils.Create("UICorner", { CornerRadius = UDim.new(0, 4) }), Utils.Create("UIStroke", { Color = Theme.Border, Thickness = 1 })
-})
-AddTabBtn.Activated:Connect(function() WorkspaceManager.CreateTab() end)
+ValidateNumericBox(ThreadsInput, false)
+ValidateNumericBox(DelayInput, true)
 
 --====================================================
--- 15. MAIN SYSTEM CHRONO INITIALIZATION
+-- 12. INITIALIZATION
 --====================================================
-SystemSettings.Initialize()
+-- Membuat tab default pertama saat system startup
 WorkspaceManager.CreateTab()
-
--- Background Runtime Loop Refresher thread
-task.spawn(function()
-    while true do
-        local ws = WorkspaceManager.ActiveWorkspace
-        if ws then
-            if ws.IsRunning then ws.Runtime = tick() - ws.StartTime end
-            LblRuntime.Text = "Runtime: " .. Utils.FormatTime(ws.Runtime)
-            LblCalls.Text = "Total Executed: " .. tostring(ws.TotalCalls)
-            WorkspaceManager.UpdateActiveUI()
-        end
-        task.wait(Config.UpdateRate)
-    end
-end)
-
-Notification.Notify("Interface Initialized", "Red Spammer application successfully loaded.", "Success")
