@@ -1,4 +1,4 @@
--- Modern Roblox Hub GUI (Settings, Rainbow Border, Book Close, Smooth Animations)
+-- Hub GUI (Settings, Rainbow Border, Book Close, Smooth Animations)
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -6,19 +6,19 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Destroy instance sebelumnya jika di-reexecute
+-- Destroy instance sebelumnya if reexecute
 if PlayerGui:FindFirstChild("CustomRobloxMenuGUI") then
     PlayerGui.CustomRobloxMenuGUI:Destroy()
 end
 
--- ScreenGui Utama
+-- Main Frame
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CustomRobloxMenuGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
--- Main Container Frame (Posisi awal selalu di tengah saat re-execute)
+-- Main Container Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 420, 0, 280)
@@ -32,7 +32,7 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
 
--- UI Stroke untuk Border & Effect Rainbow
+-- UI Stroke Border & Effect Rainbow
 local UIStroke = Instance.new("UIStroke")
 UIStroke.Name = "MainStroke"
 UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -40,7 +40,7 @@ UIStroke.Thickness = 3
 UIStroke.Color = Color3.fromRGB(50, 55, 75)
 UIStroke.Parent = MainFrame
 
--- Setup Rainbow Gradient Border
+-- Set Rainbow Gradient Border
 local RainbowGradient = Instance.new("UIGradient")
 RainbowGradient.Name = "RainbowGradient"
 RainbowGradient.Enabled = false
@@ -76,9 +76,9 @@ local function setRainbowBorder(enabled)
     end
 end
 
---------------------------------------------------------------------------------
--- Dragging System (Threshold Lebih Besar & Lock Position)
---------------------------------------------------------------------------------
+-----------------------------------------
+-- Dragging System
+-----------------------------------------
 local DragBar = Instance.new("Frame")
 DragBar.Name = "DragBar"
 DragBar.Size = UDim2.new(1, -90, 0, 45) -- Hitbox drag luas
@@ -121,9 +121,9 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
---------------------------------------------------------------------------------
+------------------------------------------------------
 -- Header & Action Buttons
---------------------------------------------------------------------------------
+------------------------------------------------------
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
 TitleLabel.Size = UDim2.new(1, -100, 0, 45)
@@ -153,7 +153,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseBtn
 
--- Tombol Settings (⚙)
+-- Settings Button
 local SettingsBtn = Instance.new("TextButton")
 SettingsBtn.Name = "SettingsBtn"
 SettingsBtn.Size = UDim2.new(0, 30, 0, 30)
@@ -169,8 +169,7 @@ SettingsBtn.Parent = MainFrame
 local SettingsCorner = Instance.new("UICorner")
 SettingsCorner.CornerRadius = UDim.new(0, 8)
 SettingsCorner.Parent = SettingsBtn
-
--- Tombol Back (Kembali)
+-- Back Button
 local BackBtn = Instance.new("TextButton")
 BackBtn.Name = "BackBtn"
 BackBtn.Size = UDim2.new(0, 75, 0, 30)
@@ -188,9 +187,9 @@ local BackCorner = Instance.new("UICorner")
 BackCorner.CornerRadius = UDim.new(0, 8)
 BackCorner.Parent = BackBtn
 
---------------------------------------------------------------------------------
--- Halaman (Main & Settings)
---------------------------------------------------------------------------------
+-----------------------------------------------------
+-- page 1 (Main & Settings)
+-----------------------------------------------------
 local PageContainer = Instance.new("Frame")
 PageContainer.Name = "PageContainer"
 PageContainer.Size = UDim2.new(1, -24, 1, -55)
@@ -199,7 +198,7 @@ PageContainer.BackgroundTransparency = 1
 PageContainer.ClipsDescendants = true
 PageContainer.Parent = MainFrame
 
--- Halaman Utama
+-- Main Page
 local MainPage = Instance.new("Frame")
 MainPage.Name = "MainPage"
 MainPage.Size = UDim2.new(1, 0, 1, 0)
@@ -227,7 +226,7 @@ InfoLabel.TextSize = 13
 InfoLabel.Font = Enum.Font.Gotham
 InfoLabel.Parent = MainPage
 
--- Halaman Settings
+-- Page Settings
 local SettingsPage = Instance.new("Frame")
 SettingsPage.Name = "SettingsPage"
 SettingsPage.Size = UDim2.new(1, 0, 1, 0)
@@ -294,9 +293,9 @@ CheckboxBox.MouseButton1Click:Connect(function()
     setRainbowBorder(isRainbowActive)
 end)
 
---------------------------------------------------------------------------------
+---------------------------------------------
 -- Animasi Navigasi (Main <-> Settings)
---------------------------------------------------------------------------------
+---------------------------------------------
 local function switchToSettings()
     TitleLabel.Text = "Settings"
     BackBtn.Visible = true
@@ -352,9 +351,9 @@ end
 SettingsBtn.MouseButton1Click:Connect(switchToSettings)
 BackBtn.MouseButton1Click:Connect(switchToMain)
 
---------------------------------------------------------------------------------
--- Fitur Hide / Show GUI (Fix Bug Animasi)
---------------------------------------------------------------------------------
+----------------------------------------------
+-- Fitur Hide / Show GUI (Fix Bug)
+----------------------------------------------
 local isGuiVisible = true
 local isToggling = false
 
@@ -393,9 +392,9 @@ local keyInputConnection = UserInputService.InputBegan:Connect(function(input, g
     end
 end)
 
---------------------------------------------------------------------------------
+--------------------------------------------------
 -- Popup Konfirmasi Close (X)
---------------------------------------------------------------------------------
+--------------------------------------------------
 local ModalOverlay = Instance.new("Frame")
 ModalOverlay.Name = "ModalOverlay"
 ModalOverlay.Size = UDim2.new(1, 0, 1, 0)
